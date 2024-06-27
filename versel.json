@@ -2,8 +2,17 @@
   "version": 2,
   "builds": [
     {
-      "src": "index.html",
-      "use": "@vercel/static-build"
+      "src": "static/images/player.gif",
+      "use": "@now/static"
+    },
+    {
+      "src": "static/images/enemy.gif",
+      "use": "@now/static"
+    },
+    {
+      "src": "templates/index.html",
+      "use": "@now/static-build",
+      "config": { "zeroConfig": true }
     }
   ]
 }
