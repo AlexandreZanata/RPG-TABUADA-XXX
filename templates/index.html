@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game Arena</title>
+    <style>
+       
+        body {
+            display: flex;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+            background-color: rgb(255, 253, 253);
+            margin: 0;
+            position: relative;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgb(0, 0, 0);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(20, 50px);
+            grid-template-rows: repeat(11, 50px);
+            gap: 2px;
+            background-color: #444;
+            border: 2px solid #ffffff;
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #666;
+            color: white;
+            font-size: 24px;
+            position: relative;
+        }
+
+        .player {
+            width: 100%;
+            height: 100%;
+            background-image: url('{{ url_for('static', filename='images/player.gif') }}');
+            background-size: cover;
+        }
+
+        .enemy {
+            width: 100%;
+            height: 100%;
+            background-image: url('{{ url_for('static', filename='images/enemy.gif') }}');
+            background-size: cover;
+        }
+
+        .yellow-square {
+            background-color: rgb(255, 0, 0);
+            border: #ffffff;
+            color: black;
+        }
+
+        .yellow-dot {
+            background-color: gold;
+            border-radius: 50%;
+            color: black;
+        }
+
+        h1, h2 {
+            text-align: center;
+            margin: 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #equation-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .tituloeq {
+            font-size: 50px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .equacao {
+            font-size: 70px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        #answer {
+            font-size: 30px;
+            width: 200px;
+            margin-bottom: 0%;
+            text-align: center;
+            height: 52px;
+            margin-top: 0%;
+        }
+
+        #submit-answer {
+            background-color: rgb(3, 201, 3);
+            font-weight: bold;
+            font-size: 25px;
+            border: 1px solid #525151;
+            padding: 10px 10px;
+            cursor: pointer;
+            top: 0%;
+            margin-top: 0%;
+        }
+
+        #scoreboard {
+            width: 100%;
+            padding: 10px;
+            background-color: rgb(0, 0, 0);
+            color: white;
+            text-align: center;
+        }
+        .tituloscore {
+            font-size: 50px;
+            margin-top: 10px;
+            background: linear-gradient(270deg, red, orange, yellow, rgb(252, 228, 11), rgb(29, 204, 248), rgb(255, 57, 229), rgb(238, 218, 130));
+            color: black;
+            font-weight: lighter;
+            width: 100%;
+            text-align: center;
+            border: 2px solid #ffffff;
+            font-weight: bold;
+        }
+    
+  
+    </style>
+</head>
+<body>
+    <div id="game">
+        <div id="board"></div>
+        <div id="equation-modal" class="hidden">
+            <h2 class="tituloeq">Resolva!!!</h2>
+            <div id="equation" class="equacao"></div>
+            <input type="number" id="answer" placeholder="Sua resposta">
+            <button id="submit-answer">ENVIAR</button>
+        </div>
+    </div>
+    <div id="scoreboard">
+        <h2 class="tituloscore">Score: <span id="score">0</span></h2>
+    </div>
+    <script>
+        const boardSize = { columns: 20, rows: 11 };
+        const player = { x: 0, y: 0, element: null, canMove: true };
+        const enemies = [];
+        let score = 0;
+        let correctAnswers = 0;
+        const pairs = [];
+        const enemyMoveInterval = 500; // Tempo em ms para a movimentação aleatória dos inimigos
+        let enemyMoveIntervalId;
+    
+        // Create all pairs of multiplications for equations
+        for (let i = 1; i <= 10; i++) {
+            for (let j = 1; j <= 10; j++) {
+                pairs.push([i, j]);
+            }
+        }
+    
+        // Shuffle function for pairs
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+    
+        shuffle(pairs);
+        let currentPairIndex = 0;
+    
+        // Generate the next equation
+        function generateNextEquation() {
+            if (currentPairIndex >= pairs.length) {
+                currentPairIndex = 0;
+                shuffle(pairs);
+            }
+            const [multiplier, multiplicand] = pairs[currentPairIndex];
+            currentPairIndex++;
+            return `${multiplier} x ${multiplicand}`;
+        }
+    
+        function calculateEquation(equation) {
+            try {
+                const validEquation = equation.replace(/x/g, '*');
+                return eval(validEquation);
+            } catch {
+                return null;
+            }
+        }
+    
+        // Initialize the board
+        function createBoard() {
+            const board = document.getElementById('board');
+            for (let y = 0; y < boardSize.rows; y++) {
+                for (let x = 0; x < boardSize.columns; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+    
+                    // Aumentar a quantidade de bolinhas amarelas
+                    if (Math.random() < 0.17) { // Aumentado para 15%
+                        cell.classList.add('yellow-square');
+                        cell.innerHTML = '?';
+                    } else if (Math.random() < 0.2) { // Aumentado para 10%
+                        cell.classList.add('yellow-dot');
+                    }
+    
+                    board.appendChild(cell);
+                }
+            }
+        }
+    
+        // Initialize the player
+        function createPlayer() {
+            player.element = document.createElement('div');
+            player.element.className = 'player';
+            getCell(player.x, player.y).appendChild(player.element);
+        }
+    
+        // Initialize the enemy
+        function createEnemy() {
+            const enemy = { x: getRandomInt(0, boardSize.columns - 1), y: getRandomInt(0, boardSize.rows - 1), element: null };
+            enemy.element = document.createElement('div');
+            enemy.element.className = 'enemy';
+            getCell(enemy.x, enemy.y).appendChild(enemy.element);
+            enemies.push(enemy);
+        }
+    
+        // Get a random integer between min and max (inclusive)
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+    
+        // Get cell element by coordinates
+        function getCell(x, y) {
+            return document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+        }
+    
+        // Move player on the board
+        function movePlayer(dx, dy) {
+            if (!player.canMove) return;
+    
+            const newX = player.x + dx;
+            const newY = player.y + dy;
+    
+            if (newX >= 0 && newX < boardSize.columns && newY >= 0 && newY < boardSize.rows) {
+                const currentCell = getCell(player.x, player.y);
+                currentCell.removeChild(player.element);
+                player.x = newX;
+                player.y = newY;
+                const newCell = getCell(player.x, player.y);
+                newCell.appendChild(player.element);
+    
+                if (newCell.classList.contains('yellow-square')) {
+                    showEquationModal();
+                    stopEnemies();
+                } else if (newCell.classList.contains('yellow-dot')) {
+                    score++;
+                    newCell.classList.remove('yellow-dot');
+                    addRandomYellowDot(); // Adiciona uma nova bolinha amarela
+                    updateScore();
+                }
+    
+                checkCollisionWithEnemies();
+            }
+        }
+    
+        // Move enemy on the board
+        function moveEnemy(enemy) {
+            const directions = [
+                { dx: -1, dy: 0 },
+                { dx: 1, dy: 0 },
+                { dx: 0, dy: -1 },
+                { dx: 0, dy: 1 }
+            ];
+            const direction = directions[Math.floor(Math.random() * directions.length)];
+            const newX = enemy.x + direction.dx;
+            const newY = enemy.y + direction.dy;
+    
+            if (newX >= 0 && newX < boardSize.columns && newY >= 0 && newY < boardSize.rows) {
+                const currentCell = getCell(enemy.x, enemy.y);
+                currentCell.removeChild(enemy.element);
+                enemy.x = newX;
+                enemy.y = newY;
+                const newCell = getCell(enemy.x, enemy.y);
+                newCell.appendChild(enemy.element);
+            }
+    
+            checkCollisionWithEnemies();
+        }
+    
+        // Stop enemies from moving
+        function stopEnemies() {
+            clearInterval(enemyMoveIntervalId);
+        }
+    
+        // Restart enemies movement
+        function restartEnemies() {
+            enemyMoveIntervalId = setInterval(() => {
+                enemies.forEach(moveEnemy);
+            }, enemyMoveInterval);
+        }
+    
+        // Add a new yellow dot at a random position
+        function addRandomYellowDot() {
+            let cell;
+            do {
+                const x = getRandomInt(0, boardSize.columns - 1);
+                const y = getRandomInt(0, boardSize.rows - 1);
+                cell = getCell(x, y);
+            } while (cell.classList.contains('yellow-square') || cell.classList.contains('yellow-dot'));
+    
+            cell.classList.add('yellow-dot');
+        }
+    
+        // Add a new yellow square at a random position
+        function addRandomYellowSquare() {
+            let cell;
+            do {
+                const x = getRandomInt(0, boardSize.columns - 1);
+                const y = getRandomInt(0, boardSize.rows - 1);
+                cell = getCell(x, y);
+            } while (cell.classList.contains('yellow-square') || cell.classList.contains('yellow-dot'));
+    
+            cell.classList.add('yellow-square');
+            cell.innerHTML = '?';
+        }
+    
+        // Update the score display
+        function updateScore() {
+            document.getElementById('score').innerText = score;
+        }
+    
+        // Show the equation modal
+        function showEquationModal() {
+            player.canMove = false;
+            const equationModal = document.getElementById('equation-modal');
+            const equationText = generateNextEquation();
+            document.getElementById('equation').innerText = equationText;
+            equationModal.classList.remove('hidden');
+        }
+    
+        // Handle equation submission
+        document.getElementById('submit-answer').addEventListener('click', function () {
+            const answer = parseFloat(document.getElementById('answer').value);
+            const equation = document.getElementById('equation').innerText;
+            const correctAnswer = calculateEquation(equation);
+    
+            if (answer === correctAnswer) {
+                score += 15;
+                correctAnswers++;
+                updateScore();
+                const cell = getCell(player.x, player.y);
+                if (cell.classList.contains('yellow-square')) {
+                    cell.classList.remove('yellow-square');
+                    cell.innerHTML = '';
+                    addRandomYellowSquare(); // Adiciona um novo quadrado amarelo
+                }
+                if (correctAnswers % 2 === 0) {
+                    createEnemy(); // Adiciona um novo inimigo após cada 2 respostas corretas
+                }
+                hideEquationModal();
+                player.canMove = true;
+                restartEnemies();
+            } else {
+                gameOver();
+            }
+        });
+    
+        // Hide the equation modal
+        function hideEquationModal() {
+            document.getElementById('equation-modal').classList.add('hidden');
+            document.getElementById('answer').value = '';
+            // Reappend the player element to ensure it stays on the board
+            getCell(player.x, player.y).appendChild(player.element);
+        }
+    
+        // Check for collisions with enemies
+        function checkCollisionWithEnemies() {
+            enemies.forEach(enemy => {
+                if (player.x === enemy.x && player.y === enemy.y) {
+                    gameOver();
+                }
+            });
+        }
+    
+        // Game over logic
+        function gameOver() {
+            alert('Game Over');
+            location.reload();
+        }
+    
+        // Initialize the game
+        function initGame() {
+            createBoard();
+            createPlayer();
+            createEnemy();
+    
+            // Move enemies at intervals
+            enemyMoveIntervalId = setInterval(() => {
+                enemies.forEach(moveEnemy);
+            }, enemyMoveInterval);
+        }
+    
+        // Handle player movement with arrow keys
+        document.addEventListener('keydown', function (event) {
+            switch (event.key) {
+                case 'ArrowUp':
+                    movePlayer(0, -1);
+                    break;
+                case 'ArrowDown':
+                    movePlayer(0, 1);
+                    break;
+                case 'ArrowLeft':
+                    movePlayer(-1, 0);
+                    break;
+                case 'ArrowRight':
+                    movePlayer(1, 0);
+                    break;
+            }
+        });
+    
+        initGame();
+    </script>
+    
+</body>
+</html>
